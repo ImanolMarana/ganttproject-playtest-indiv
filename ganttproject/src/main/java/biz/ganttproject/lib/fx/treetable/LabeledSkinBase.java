@@ -946,196 +946,195 @@ public abstract class LabeledSkinBase<C extends Labeled> extends SkinBase<C> {
   }
 
   private void updateDisplayedText(double w, double h) {
-    if (invalidText) {
-      final Labeled labeled = getSkinnable();
-      String cleanText = getCleanText();
-      int mnemonicIndex = -1;
+        if (!invalidText) {
+            return;
+        }
+        updateMnemonic(w, h);
 
-      if (cleanText != null && cleanText.length() > 0
-        && bindings != null
-        && !com.sun.javafx.PlatformUtil.isMac()
-        && getSkinnable().isMnemonicParsing()) {
-        /*
-         ** the Labeled has a MnemonicParsing property,
-         ** if set true, then auto-parsing will check for
-         ** a mnemonic
-         */
-        if (labeled instanceof Label) {
-          // buttons etc
-          labeledNode = ((Label)labeled).getLabelFor();
+        updateText(w, h);
+
+        invalidText = false;
+    }
+
+    private void updateMnemonic(double w, double h) {
+        final Labeled labeled = getSkinnable();
+        String cleanText = getCleanText();
+        int mnemonicIndex = -1;
+
+        if (cleanText != null && cleanText.length() > 0
+                && bindings != null
+                && !com.sun.javafx.PlatformUtil.isMac()
+                && getSkinnable().isMnemonicParsing()) {
+            if (labeled instanceof Label) {
+                labeledNode = ((Label) labeled).getLabelFor();
+            } else {
+                labeledNode = labeled;
+            }
+
+            if (labeledNode == null) {
+                labeledNode = labeled;
+            }
+            mnemonicIndex = bindings.getMnemonicIndex();
+        }
+
+        if (containsMnemonic) {
+            updateExistingMnemonic(mnemonicIndex);
         } else {
-          labeledNode = labeled;
-        }
-
-        if (labeledNode == null) {
-          labeledNode = labeled;
-        }
-        mnemonicIndex = bindings.getMnemonicIndex() ;
-      }
-
-      /*
-       ** we were previously a mnemonic
-       */
-      if (containsMnemonic) {
-        /*
-         ** are we no longer a mnemonic, or have we changed code?
-         */
-        if (mnemonicScene != null) {
-          if (mnemonicIndex == -1 ||
-            (bindings != null && !bindings.getMnemonicKeyCombination().equals(mnemonicCode))) {
             removeMnemonic();
-            containsMnemonic = false;
-          }
         }
-      }
-      else {
-        /*
-         ** this can happen if mnemonic parsing is
-         ** disabled on a previously valid mnemonic
-         */
-        removeMnemonic();
-      }
 
-      /*
-       ** check we have a labeled
-       */
-      if (cleanText != null && cleanText.length() > 0
-        && mnemonicIndex >= 0 && !containsMnemonic) {
-        containsMnemonic = true;
-        mnemonicCode = bindings.getMnemonicKeyCombination();
-        addMnemonic();
-      }
-
-      if (containsMnemonic) {
-        if (mnemonic_underscore == null) {
-          mnemonic_underscore = new Line();
-          mnemonic_underscore.setStartX(0.0f);
-          mnemonic_underscore.setStartY(0.0f);
-          mnemonic_underscore.setEndY(0.0f);
-          mnemonic_underscore.getStyleClass().clear();
-          mnemonic_underscore.getStyleClass().setAll("mnemonic-underline");
+        if (cleanText != null && cleanText.length() > 0
+                && mnemonicIndex >= 0 && !containsMnemonic) {
+            containsMnemonic = true;
+            mnemonicCode = bindings.getMnemonicKeyCombination();
+            addMnemonic();
         }
-        if (!getChildren().contains(mnemonic_underscore)) {
-          getChildren().add(mnemonic_underscore);
+
+        updateMnemonicUnderscore();
+    }
+
+    private void updateExistingMnemonic(int mnemonicIndex) {
+        if (mnemonicScene != null) {
+            if (mnemonicIndex == -1 ||
+                    (bindings != null && !bindings.getMnemonicKeyCombination().equals(mnemonicCode))) {
+                removeMnemonic();
+                containsMnemonic = false;
+            }
         }
-      } else if (mnemonic_underscore != null && getChildren().contains(mnemonic_underscore)) {
-        Platform.runLater(() -> {
-          getChildren().remove(mnemonic_underscore);
-          mnemonic_underscore = null;
-        });
-      }
+    }
 
-      int len = cleanText != null ? cleanText.length() : 0;
-      boolean multiline = false;
-
-      if (cleanText != null && len > 0) {
-        int i = cleanText.indexOf('\n');
-        if (i > -1 && i < len - 1) {
-          // Multiline text with embedded newlines - not
-          // taking into account a potential trailing newline.
-          multiline = true;
+    private void updateMnemonicUnderscore() {
+        if (containsMnemonic) {
+            if (mnemonic_underscore == null) {
+                mnemonic_underscore = new Line();
+                mnemonic_underscore.setStartX(0.0f);
+                mnemonic_underscore.setStartY(0.0f);
+                mnemonic_underscore.setEndY(0.0f);
+                mnemonic_underscore.getStyleClass().clear();
+                mnemonic_underscore.getStyleClass().setAll("mnemonic-underline");
+            }
+            if (!getChildren().contains(mnemonic_underscore)) {
+                getChildren().add(mnemonic_underscore);
+            }
+        } else if (mnemonic_underscore != null && getChildren().contains(mnemonic_underscore)) {
+            Platform.runLater(() -> {
+                getChildren().remove(mnemonic_underscore);
+                mnemonic_underscore = null;
+            });
         }
-      }
+    }
 
-      String result;
-      boolean horizontalPosition =
-        (labeled.getContentDisplay() == ContentDisplay.LEFT ||
-          labeled.getContentDisplay() == ContentDisplay.RIGHT);
+    private void updateText(double w, double h) {
+        final Labeled labeled = getSkinnable();
+        String cleanText = getCleanText();
+        int len = cleanText != null ? cleanText.length() : 0;
 
-      double availableWidth = labeled.getWidth() -
-        snappedLeftInset() - snappedRightInset();
+        String result = computeText(w, h, labeled, cleanText, len);
 
-      if (!isIgnoreText()) {
-        availableWidth -= leftLabelPadding() + rightLabelPadding();
-      }
-      availableWidth = Math.max(availableWidth, 0);
+        if (result != null && result.endsWith("\n")) {
+            result = result.substring(0, result.length() - 1);
+        }
 
-      if (w == -1) {
-        w = availableWidth;
-      }
-      double minW = Math.min(computeMinLabeledPartWidth(-1, snappedTopInset() , snappedRightInset(), snappedBottomInset(), snappedLeftInset()), availableWidth);
-      if (horizontalPosition && !isIgnoreGraphic()) {
-        double graphicW = (labeled.getGraphic().getLayoutBounds().getWidth() + labeled.getGraphicTextGap());
-        w -= graphicW;
-        minW -= graphicW;
-      }
-      wrapWidth = Math.max(minW, w);
+        text.setText(result);
+        updateWrappingWidth();
+    }
 
-      boolean verticalPosition =
-        (labeled.getContentDisplay() == ContentDisplay.TOP ||
-          labeled.getContentDisplay() == ContentDisplay.BOTTOM);
+    private String computeText(double w, double h, Labeled labeled, String cleanText, int len) {
+        boolean multiline = isMultiline(cleanText, len);
+        double availableWidth = computeAvailableWidth(labeled, w);
+        double availableHeight = computeAvailableHeight(labeled, h);
+        wrapWidth = computeWrapWidth(labeled, availableWidth);
+        wrapHeight = computeWrapHeight(labeled, availableHeight);
 
-      double availableHeight = labeled.getHeight() -
-        snappedTopInset() - snappedBottomInset();
+        updateWrappingWidth();
 
-      if (!isIgnoreText()) {
-        availableHeight -= topLabelPadding() + bottomLabelPadding();
-      }
-      availableHeight = Math.max(availableHeight, 0);
+        Font font = text.getFont();
+        OverrunStyle truncationStyle = labeled.getTextOverrun();
+        String ellipsisString = labeled.getEllipsisString();
 
-      if (h == -1) {
-        h = availableHeight;
-      }
-      double minH = Math.min(computeMinLabeledPartHeight(wrapWidth, snappedTopInset() , snappedRightInset(), snappedBottomInset(), snappedLeftInset()), availableHeight);
-      if (verticalPosition && labeled.getGraphic() != null) {
-        double graphicH = labeled.getGraphic().getLayoutBounds().getHeight() + labeled.getGraphicTextGap();
-        h -= graphicH;
-        minH -= graphicH;
-      }
-      wrapHeight = Math.max(minH, h);
+        if (labeled.isWrapText()) {
+            return Utils.computeClippedWrappedText(font, cleanText, wrapWidth, wrapHeight, labeled.getLineSpacing(), truncationStyle, ellipsisString, text.getBoundsType());
+        } else if (multiline) {
+            return computeMultilineText(font, cleanText, ellipsisString, truncationStyle);
+        } else {
+            return Utils.computeClippedText(font, cleanText, wrapWidth, truncationStyle, ellipsisString);
+        }
+    }
 
-      updateWrappingWidth();
+    private boolean isMultiline(String cleanText, int len) {
+        if (cleanText != null && len > 0) {
+            int i = cleanText.indexOf('\n');
+            if (i > -1 && i < len - 1) {
+                return true;
+            }
+        }
+        return false;
+    }
 
-      Font font = text.getFont();
-      OverrunStyle truncationStyle = labeled.getTextOverrun();
-      String ellipsisString = labeled.getEllipsisString();
+    private double computeAvailableWidth(Labeled labeled, double w) {
+        double availableWidth = labeled.getWidth() -
+                snappedLeftInset() - snappedRightInset();
 
-      if (labeled.isWrapText()) {
-        result = Utils.computeClippedWrappedText(font, cleanText, wrapWidth, wrapHeight, labeled.getLineSpacing(), truncationStyle, ellipsisString, text.getBoundsType());
-      } else if (multiline) {
+        if (!isIgnoreText()) {
+            availableWidth -= leftLabelPadding() + rightLabelPadding();
+        }
+        availableWidth = Math.max(availableWidth, 0);
+
+        if (w == -1) {
+            w = availableWidth;
+        }
+        return w;
+    }
+
+    private double computeAvailableHeight(Labeled labeled, double h) {
+        double availableHeight = labeled.getHeight() -
+                snappedTopInset() - snappedBottomInset();
+
+        if (!isIgnoreText()) {
+            availableHeight -= topLabelPadding() + bottomLabelPadding();
+        }
+        availableHeight = Math.max(availableHeight, 0);
+
+        if (h == -1) {
+            h = availableHeight;
+        }
+        return h;
+    }
+
+
+    private double computeWrapWidth(Labeled labeled, double availableWidth) {
+        double minW = Math.min(computeMinLabeledPartWidth(-1, snappedTopInset(), snappedRightInset(), snappedBottomInset(), snappedLeftInset()), availableWidth);
+        if ((labeled.getContentDisplay() == ContentDisplay.LEFT || labeled.getContentDisplay() == ContentDisplay.RIGHT) && !isIgnoreGraphic()) {
+            double graphicW = (labeled.getGraphic().getLayoutBounds().getWidth() + labeled.getGraphicTextGap());
+            minW -= graphicW;
+        }
+        return Math.max(minW, availableWidth);
+    }
+
+    private double computeWrapHeight(Labeled labeled, double availableHeight) {
+        double minH = Math.min(computeMinLabeledPartHeight(wrapWidth, snappedTopInset(), snappedRightInset(), snappedBottomInset(), snappedLeftInset()), availableHeight);
+        if ((labeled.getContentDisplay() == ContentDisplay.TOP || labeled.getContentDisplay() == ContentDisplay.BOTTOM) && labeled.getGraphic() != null) {
+            double graphicH = labeled.getGraphic().getLayoutBounds().getHeight() + labeled.getGraphicTextGap();
+            minH -= graphicH;
+        }
+        return Math.max(minH, availableHeight);
+    }
+
+    private String computeMultilineText(Font font, String cleanText, String ellipsisString, OverrunStyle truncationStyle) {
         StringBuilder sb = new StringBuilder();
 
         String[] splits = cleanText.split("\n");
         for (int i = 0; i < splits.length; i++) {
-          sb.append(Utils.computeClippedText(font, splits[i], wrapWidth, truncationStyle, ellipsisString));
-          if (i < splits.length - 1) {
-            sb.append('\n');
-          }
+            sb.append(Utils.computeClippedText(font, splits[i], wrapWidth, truncationStyle, ellipsisString));
+            if (i < splits.length - 1) {
+                sb.append('\n');
+            }
         }
 
-        // TODO: Consider what to do in the case where vertical space is
-        // limited and the last visible line isn't already truncated
-        // with a trailing ellipsis. What if the style calls for leading
-        // or center ellipses? We could possibly add an additional
-        // trailing ellipsis to the last visible line, like this:
-
-        // +--------------------------------+
-        // |  This is some long text with multiple lines\n
-        // |  where more than one exceed the|width\n
-        // |  and wrapText is false, and all|lines\n
-        // +--don't fit.--------------------+
-        //
-        // +--------------------------------+
-        // |  This is some...multiple lines |
-        // |  where more t...ceed the width |
-        // |  and wrapText...d all lines... |
-        // +--------------------------------+
-
-        result = sb.toString();
-      } else {
-        result = Utils.computeClippedText(font, cleanText, wrapWidth, truncationStyle, ellipsisString);
-      }
-
-      if (result != null && result.endsWith("\n")) {
-        // Strip ending newline so we don't display another row.
-        result = result.substring(0, result.length() - 1);
-      }
-
-      text.setText(result);
-      updateWrappingWidth();
-      invalidText = false;
+        return sb.toString();
     }
-  }
+
+//Refactoring end
 
   /**
    * Gets the clean text, which is the source text after mnemonic symbols have been removed.
