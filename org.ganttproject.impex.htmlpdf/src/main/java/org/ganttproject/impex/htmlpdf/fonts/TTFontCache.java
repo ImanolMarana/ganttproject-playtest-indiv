@@ -289,62 +289,75 @@ public class TTFontCache {
 
   public FontMapper getFontMapper(final FontSubstitutionModel substitutions, final String charset) {
     return new FontMapper() {
-      private final Map<Font, BaseFont> myFontCache = new HashMap<>();
-
-      @Override
-      public BaseFont awtToPdf(Font awtFont) {
-        ourLogger.debug("Searching for BaseFont for awtFont={} charset={} cache={}", awtFont, charset, myFontCache);
-        if (myFontCache.containsKey(awtFont)) {
-          ourLogger.debug("Found in cache.");
-          return myFontCache.get(awtFont);
-        }
-
-        String family = awtFont.getFamily().toLowerCase();
-        Function<String, BaseFont> f = myMap_Family_ItextFont.get(family);
-        ourLogger.debug("Searching for supplier: family={} size={}", family, awtFont.getSize());
-        if (f != null) {
-          BaseFont result = f.apply(charset);
+        private final Map<Font, BaseFont> myFontCache = new HashMap<>();
+  
+        @Override
+        public BaseFont awtToPdf(Font awtFont) {
+          ourLogger.debug("Searching for BaseFont for awtFont={} charset={} cache={}", awtFont, charset, myFontCache);
+          if (myFontCache.containsKey(awtFont)) {
+            ourLogger.debug("Found in cache.");
+            return myFontCache.get(awtFont);
+          }
+  
+          BaseFont result = findBaseFont(awtFont, substitutions, charset);
           if (result == null) {
-            ourLogger.warn("... failed to find the base font for family={} charset={}", family, charset);
-          } else {
-            ourLogger.debug("... created BaseFont: {}", getInfo(result));
-            myFontCache.put(awtFont, result);
+            result = getFallbackFont(charset);
+            ourLogger.debug("so, trying fallback font={}", result);
+          }
+          if (result == null) {
+            ourLogger.error(
+                "Can't find a PDF font corresponding to AWT font with family={}. " + "Also tried substitution family={} and fallback font. Charset={}",
+                awtFont.getFamily(), awtFont.getFamily(), charset);
           }
           return result;
         }
-
-        family = family.replace(' ', '_');
-        if (myProperties.containsKey("font." + family)) {
-          family = String.valueOf(myProperties.get("font." + family));
+  
+        private BaseFont findBaseFont(Font awtFont, FontSubstitutionModel substitutions, String charset) {
+          String family = awtFont.getFamily().toLowerCase();
+          BaseFont result = tryGetBaseFont(family, charset);
+          if (result != null) {
+            return result;
+          }
+  
+          family = family.replace(' ', '_');
+          if (myProperties.containsKey("font." + family)) {
+            family = String.valueOf(myProperties.get("font." + family));
+          }
+          ourLogger.debug("Searching for substitution. Family={}", family);
+          FontSubstitution substitution = substitutions.getSubstitution(family);
+          if (substitution != null) {
+            family = substitution.getSubstitutionFamily();
+          }
+          ourLogger.debug("substitution family={} supplier={}", family, myMap_Family_ItextFont.get(family));
+          return tryGetBaseFont(family, charset);
         }
-        ourLogger.debug("Searching for substitution. Family={}", family);
-        FontSubstitution substitution = substitutions.getSubstitution(family);
-        if (substitution != null) {
-          family = substitution.getSubstitutionFamily();
+  
+        private BaseFont tryGetBaseFont(String family, String charset) {
+          Function<String, BaseFont> f = myMap_Family_ItextFont.get(family);
+          ourLogger.debug("Searching for supplier: family={} size={}", family,
+              f == null ? "null" : f.toString());
+          if (f != null) {
+            BaseFont result = f.apply(charset);
+            if (result == null) {
+              ourLogger.warn("... failed to find the base font for family={} charset={}", family, charset);
+            } else {
+              ourLogger.debug("... created BaseFont: {}", getInfo(result));
+              myFontCache.put(new Font(family, Font.PLAIN, 12), result);
+            }
+            return result;
+          }
+          return null;
         }
-        f = myMap_Family_ItextFont.get(family);
-        ourLogger.debug("substitution family={} supplier={}", family, f);
-        if (f != null) {
-          BaseFont result = f.apply(charset);
-          ourLogger.debug("created base font={}", result);
-          myFontCache.put(awtFont, result);
-          return result;
+  
+        @Override
+        public Font pdfToAwt(BaseFont itextFont, int size) {
+          return null;
         }
-        BaseFont result = getFallbackFont(charset);
-        ourLogger.debug("so, trying fallback font={}", result);
-        if (result == null) {
-          ourLogger.error("Can't find a PDF font corresponding to AWT font with family={}. " +
-              "Also tried substitution family={} and fallback font. Charset={}", awtFont.getFamily(), family, charset);
-        }
-        return result;
-      }
-
-      @Override
-      public Font pdfToAwt(BaseFont itextFont, int size) {
-        return null;
-      }
-
-    };
+  
+      };
+  }
+  
+//Refactoring end
   }
 
   protected BaseFont getFallbackFont(String charset) {
